@@ -1,0 +1,255 @@
+// Prisma Schema for ChidiyaAI Admin and Supplier Portal
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ADMIN MODELS
+// ============================================
+
+model Admin {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String   // bcrypt hashed
+  name          String?
+  role          String   @default("admin") // admin, super_admin
+  lastLogin     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  activityLogs  ActivityLog[]
+
+  @@map("admins")
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  adminId     String?
+  action      String   // approved_supplier, flagged_buyer, etc.
+  entityType  String   // supplier, buyer, inquiry
+  entityId    String?
+  message     String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  admin       Admin?   @relation(fields: [adminId], references: [id])
+
+  @@map("activity_logs")
+}
+
+model AIAlert {
+  id          String   @id @default(uuid())
+  severity    String   // high, medium, low
+  title       String
+  description String
+  entityType  String?  // supplier, buyer
+  entityId    String?
+  status      String   @default("active") // active, dismissed, resolved
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  @@map("ai_alerts")
+}
+
+// ============================================
+// SUPPLIER MODELS
+// ============================================
+
+model Supplier {
+  id                String   @id @default(uuid())
+  companyName       String
+  email             String   @unique
+  password          String   // bcrypt hashed
+  phone             String?
+  gstNumber         String?
+  panNumber         String?
+  
+  // Business Info
+  productCategories String[] // Array of categories
+  capacity          String?  // small, medium, large, enterprise
+  moq               String?  // Minimum order quantity
+  serviceLocations  String?
+  
+  // Profile Info
+  address           String?
+  city              String?
+  state             String?
+  pincode           String?
+  website           String?
+  profileImage      String?  // URL to profile image
+  description       String?
+  categories        String?  // Comma separated categories
+  establishedYear   String?
+  employeeCount     String?
+  certifications    String?
+  
+  // Verification
+  status            String   @default("pending") // pending, approved, suspended, banned
+  badges            String[] // gst, premium, verified, etc.
+  documents         SupplierDocument[]
+  
+  // Timestamps
+  lastLogin         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  inquiries         Inquiry[]
+  quotes            Quote[]
+  products          Product[]
+
+  @@map("suppliers")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  supplierId  String
+  
+  // Product Details
+  name        String
+  category    String?
+  description String?
+  priceRange  String?
+  moq         String?
+  leadTime    String?
+  images      String[] // Array of image URLs
+  
+  // Status
+  isActive    Boolean  @default(true)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@map("products")
+}
+
+model SupplierDocument {
+  id          String   @id @default(uuid())
+  supplierId  String
+  docType     String   // gst_certificate, pan_card, iec, etc.
+  fileName    String
+  fileUrl     String?
+  status      String   @default("pending") // pending, verified, rejected
+  createdAt   DateTime @default(now())
+
+  // Relations
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@map("supplier_documents")
+}
+
+// ============================================
+// BUYER MODELS
+// ============================================
+
+model Buyer {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  phone         String?
+  companyName   String?
+  password      String?  // bcrypt hashed (added for custom auth)
+  
+  // Status
+  status        String   @default("active") // active, flagged, warned, restricted
+  flagged       Boolean  @default(false)
+  flagReason    String?
+  flagSeverity  String?  // low, medium, high
+  
+  // Stats
+  inquiryCount  Int      @default(0)
+  
+  // Timestamps
+  lastActive    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  inquiries     Inquiry[]
+
+  @@map("buyers")
+}
+
+// ============================================
+// INQUIRY & QUOTE MODELS
+// ============================================
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  inquiries   Inquiry[]
+
+  @@map("categories")
+}
+
+model Inquiry {
+  id          String   @id @default(uuid())
+  buyerId     String
+  supplierId  String?  // Matched supplier
+  categoryId  String?
+  
+  // Inquiry Details
+  product     String
+  description String?
+  quantity    String
+  budget      String?
+  timeline    String?
+  
+  // Status
+  status      String   @default("new") // new, quoted, accepted, rejected, closed
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  buyer       Buyer    @relation(fields: [buyerId], references: [id])
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  category    Category? @relation(fields: [categoryId], references: [id])
+  quotes      Quote[]
+
+  @@map("inquiries")
+}
+
+model Quote {
+  id          String   @id @default(uuid())
+  inquiryId   String
+  supplierId  String
+  
+  // Quote Details
+  price       String
+  moq         String?
+  timeline    String?
+  notes       String?
+  
+  // Status
+  status      String   @default("submitted") // submitted, accepted, rejected
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  inquiry     Inquiry  @relation(fields: [inquiryId], references: [id])
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+
+  @@map("quotes")
+}
