@@ -1,6 +1,10 @@
 import React from "react"
 
-import { IconProps } from "types/icon"
+type IconProps = {
+  size?: string | number
+  color?: string
+  className?: string
+}
 
 const Package: React.FC<IconProps> = ({
   size = "20",
